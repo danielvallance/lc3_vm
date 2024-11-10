@@ -67,6 +67,24 @@ fn read_image(_image_path: &str) -> bool {
     true
 }
 
+fn sign_extend(mut operand: u16, no_of_bits: u8) -> u16 {
+    if (operand >> (no_of_bits - 1)) == 1 {
+        operand |= 0xFFFF << no_of_bits
+    }
+    operand
+}
+
+fn update_flags(new_reg_value: u16, r_cond: &mut u16) {
+    if new_reg_value == 0 {
+        *r_cond = FL_ZRO;
+    /* MSB being 1 indicates a negative value */
+    } else if (new_reg_value >> 15) == 1 {
+        *r_cond = FL_NEG;
+    } else {
+        *r_cond = FL_POS;
+    }
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
@@ -106,8 +124,28 @@ fn main() {
         /* Get opcode which is stored in first 4 bits of instruction */
         let op = instruction >> 12;
 
+        /*
+         * Execute the instruction. Specifications for each instruction
+         * can be found here: https://www.jmeiners.com/lc3-vm/supplies/lc3-isa.pdf
+         */
         match op {
-            OP_ADD => (),
+            OP_ADD => {
+                let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Where result will be stored */
+                let src_reg_1 = ((instruction >> 6) & 0x7) as usize; /* Where the first operand is */
+                let imm_mode = ((instruction >> 5) & 0x1) == 1; /* Whether immediate mode is being used */
+
+                if imm_mode {
+                    /* Immediate mode means the second operand is encoded in the instruction itself */
+                    let imm_operand = sign_extend(instruction & 0x1f, 5);
+                    registers[dst_reg] = registers[src_reg_1] + imm_operand;
+                } else {
+                    /* If immediate mode is not being used, the instruction refers to a second destination register */
+                    let src_reg_2 = (instruction & 0x7) as usize;
+                    registers[dst_reg] = registers[src_reg_1] + registers[src_reg_2];
+                }
+
+                update_flags(registers[dst_reg], &mut registers[RCOND as usize]);
+            }
             OP_AND => (),
             OP_NOT => (),
             OP_BR => (),
