@@ -5,6 +5,8 @@
 //! https://www.jmeiners.com/lc3-vm/ and I am doing
 //! this as a learning exercise
 
+use std::{env, fs::read, process::exit};
+
 /* The LC-3 architecture contains 65536 memory locations */
 const MEMORY_MAX: usize = 1 << 16;
 
@@ -61,7 +63,25 @@ const FL_POS: u16 = 1 << 0; /* Positive */
 const FL_ZRO: u16 = 1 << 1; /* Zero */
 const FL_NEG: u16 = 1 << 2; /* Negative */
 
+fn read_image(_image_path: &str) -> bool {
+    true
+}
+
 fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    if args.len() < 2 {
+        println!("Usage: lc3_vm <image_file_1> [another_image_file]*");
+        exit(1);
+    }
+
+    /* Read image file(s) */
+    for arg in args {
+        if !read_image(&arg) {
+            println!("Could not read image: {}", arg);
+            exit(1);
+        }
+    }
     /* Memory is stored in this array */
     let mut memory: [u16; MEMORY_MAX] = [0; MEMORY_MAX];
 
