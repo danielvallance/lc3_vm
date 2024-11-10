@@ -27,6 +27,9 @@ const RPC: u16 = 8; /* Program counter */
 const RCOND: u16 = 9; /* Condition flag register */
 const RCOUNT: u16 = 10; /* UNUSED: Number of registers */
 
+/* Program Counter's default starting position */
+const PC_START: u16 = 0x3000;
+
 /* The LC-3 architecture's instruction set supports the following opcodes */
 const OP_BR: u16 = 0; /* Branch */
 const OP_ADD: u16 = 1; /* Add  */
@@ -64,4 +67,44 @@ fn main() {
 
     /* Register values are stored in this array */
     let mut registers: [u16; RCOUNT as usize] = [0; RCOUNT as usize];
+
+    /*
+     * Exactly one condition flag is set in RCOND
+     * at any given moment. Initially this will be FL_ZERO
+     */
+    registers[RCOND as usize] = FL_ZRO;
+
+    /* Set PC to default starting position */
+    registers[RPC as usize] = PC_START;
+
+    /* Main fetch-execute cycle loop */
+    let mut running = true;
+    while running {
+        /* Fetch instruction at PC's address */
+        let instruction = memory[registers[RPC as usize] as usize];
+
+        /* Get opcode which is stored in first 4 bits of instruction */
+        let op = instruction >> 12;
+
+        match op {
+            OP_ADD => (),
+            OP_AND => (),
+            OP_NOT => (),
+            OP_BR => (),
+            OP_JMP => (),
+            OP_JSR => (),
+            OP_LD => (),
+            OP_LDI => (),
+            OP_LDR => (),
+            OP_LEA => (),
+            OP_ST => (),
+            OP_STI => (),
+            OP_STR => (),
+            OP_TRAP => (),
+            OP_RES => (),
+            OP_RTI => (),
+            _ => (),
+        }
+        running = false; /* Terminate the loop */
+    }
 }
