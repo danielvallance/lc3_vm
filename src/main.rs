@@ -167,9 +167,9 @@ fn main() {
             OP_STI => (),
             OP_STR => (),
             OP_TRAP => (),
-            OP_RES => (),
-            OP_RTI => (),
-            _ => (),
+            OP_RES => exit(1), /* Not implemented */
+            OP_RTI => exit(1), /* Not implemented */
+            _ => exit(1),
         }
         running = false; /* Terminate the loop */
     }
