@@ -17,17 +17,17 @@ const MEMORY_MAX: usize = 1 << 16;
  * They are all 16 bits (the size of a word in this architecture)
  */
 /* General purpose registers */
-const R0: u16 = 0;
-const R1: u16 = 1;
-const R2: u16 = 2;
-const R3: u16 = 3;
-const R4: u16 = 4;
-const R5: u16 = 5;
-const R6: u16 = 6;
-const R7: u16 = 7;
-const RPC: u16 = 8; /* Program counter */
-const RCOND: u16 = 9; /* Condition flag register */
-const RCOUNT: u16 = 10; /* UNUSED: Number of registers */
+const R0: usize = 0;
+const R1: usize = 1;
+const R2: usize = 2;
+const R3: usize = 3;
+const R4: usize = 4;
+const R5: usize = 5;
+const R6: usize = 6;
+const R7: usize = 7;
+const RPC: usize = 8; /* Program counter */
+const RCOND: usize = 9; /* Condition flag register */
+const RCOUNT: usize = 10; /* UNUSED: Number of registers */
 
 /* Program Counter's default starting position */
 const PC_START: u16 = 0x3000;
@@ -104,22 +104,22 @@ fn main() {
     let mut memory: [u16; MEMORY_MAX] = [0; MEMORY_MAX];
 
     /* Register values are stored in this array */
-    let mut registers: [u16; RCOUNT as usize] = [0; RCOUNT as usize];
+    let mut registers: [u16; RCOUNT] = [0; RCOUNT];
 
     /*
      * Exactly one condition flag is set in RCOND
      * at any given moment. Initially this will be FL_ZERO
      */
-    registers[RCOND as usize] = FL_ZRO;
+    registers[RCOND] = FL_ZRO;
 
     /* Set PC to default starting position */
-    registers[RPC as usize] = PC_START;
+    registers[RPC] = PC_START;
 
     /* Main fetch-execute cycle loop */
     let mut running = true;
     while running {
         /* Fetch instruction at PC's address */
-        let instruction = memory[registers[RPC as usize] as usize];
+        let instruction = memory[registers[RPC] as usize];
 
         /* Get opcode which is stored in first 4 bits of instruction */
         let op = instruction >> 12;
@@ -144,7 +144,7 @@ fn main() {
                     registers[dst_reg] = registers[src_reg_1] + registers[src_reg_2];
                 }
 
-                update_flags(registers[dst_reg], &mut registers[RCOND as usize]);
+                update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
             OP_AND => (),
             OP_NOT => (),
