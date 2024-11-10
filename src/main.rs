@@ -152,7 +152,15 @@ fn main() {
             OP_JMP => (),
             OP_JSR => (),
             OP_LD => (),
-            OP_LDI => (),
+            OP_LDI => {
+                let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
+                /* Will be added to PC to find address of address of data to be loaded */
+                let pc_offset = sign_extend(instruction & 0x1FF, 9);
+
+                /* Load value at address referred to in address of the PC, combined with pc_offset */
+                registers[dst_reg] = memory[memory[(registers[RPC] + pc_offset) as usize] as usize];
+                update_flags(registers[dst_reg], &mut registers[RCOND]);
+            }
             OP_LDR => (),
             OP_LEA => (),
             OP_ST => (),
