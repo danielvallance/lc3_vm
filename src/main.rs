@@ -146,7 +146,23 @@ fn main() {
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
-            OP_AND => (),
+            OP_AND => {
+                let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Where result will be stored */
+                let src_reg_1 = ((instruction >> 6) & 0x7) as usize; /* Where the first operand is */
+                let imm_mode = ((instruction >> 5) & 0x1) == 1; /* Whether immediate mode is being used */
+
+                if imm_mode {
+                    /* Immediate mode means the second operand is encoded in the instruction itself */
+                    let imm_operand = sign_extend(instruction & 0x1f, 5);
+                    registers[dst_reg] = registers[src_reg_1] & imm_operand;
+                } else {
+                    /* If immediate mode is not being used, the instruction refers to a second destination register */
+                    let src_reg_2 = (instruction & 0x7) as usize;
+                    registers[dst_reg] = registers[src_reg_1] & registers[src_reg_2];
+                }
+
+                update_flags(registers[dst_reg], &mut registers[RCOND]);
+            }
             OP_NOT => (),
             OP_BR => (),
             OP_JMP => (),
