@@ -171,7 +171,17 @@ fn main() {
                 registers[dst_reg] = !registers[src_reg_1];
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
-            OP_BR => (),
+            OP_BR => {
+                /* These bits in the instruction define the condition flags being tested */
+                let condition_flags = (instruction >> 9) & 0x7;
+
+                /* The flags are in the same order in the instruction and the register */
+                if (condition_flags & registers[RCOND]) != 0 {
+                    /* Branch by adding the sign extended PC offset to the PC */
+                    let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                    registers[RPC] += pc_offset;
+                }
+            }
             OP_JMP => (),
             OP_JSR => (),
             OP_LD => (),
