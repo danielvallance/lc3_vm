@@ -163,7 +163,14 @@ fn main() {
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
-            OP_NOT => (),
+            OP_NOT => {
+                let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Where result will be stored */
+                let src_reg_1 = ((instruction >> 6) & 0x7) as usize; /* Where the operand is */
+
+                /* Calculate bitwise NOT, store in dst_reg, and update flags */
+                registers[dst_reg] = !registers[src_reg_1];
+                update_flags(registers[dst_reg], &mut registers[RCOND]);
+            }
             OP_BR => (),
             OP_JMP => (),
             OP_JSR => (),
