@@ -227,7 +227,15 @@ fn main() {
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
-            OP_LEA => (),
+            OP_LEA => {
+                let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
+
+                /* Get PC offset from the instruction, and add to PC to get address of value */
+                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                registers[dst_reg] = memory[(registers[RPC] + pc_offset) as usize];
+
+                update_flags(registers[dst_reg], &mut registers[RCOND]);
+            }
             OP_ST => (),
             OP_STI => (),
             OP_STR => (),
