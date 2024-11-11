@@ -199,7 +199,15 @@ fn main() {
                     registers[RPC] += pc_offset;
                 }
             }
-            OP_LD => (),
+            OP_LD => {
+                let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
+
+                /* Get PC offset, add to PC, and load value at the resulting memory location to dst_reg */
+                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                registers[dst_reg] = memory[(registers[RPC] + pc_offset) as usize];
+
+                update_flags(registers[dst_reg], &mut registers[RCOND]);
+            }
             OP_LDI => {
                 let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
                 /* Will be added to PC to find address of address of data to be loaded */
