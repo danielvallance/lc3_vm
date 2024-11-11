@@ -186,7 +186,19 @@ fn main() {
                 let base_reg = ((instruction >> 6) & 0x7) as usize; /* Register which contains position to jump to */
                 registers[RPC] = registers[base_reg]; /* Jump to specified location */
             }
-            OP_JSR => (),
+            OP_JSR => {
+                registers[R7] = registers[RPC]; /* Save PC in R7 */
+
+                /* If this bit is 0, jump to address in the register specified in the instruction */
+                if (instruction & (1 << 11)) == 0 {
+                    let base_reg = ((instruction >> 6) & 0x7) as usize;
+                    registers[RPC] = registers[base_reg];
+                /* If the bit is 1, jump to the address encoded in the instruction itself */
+                } else {
+                    let pc_offset = sign_extend(instruction & 0x7ff, 11);
+                    registers[RPC] += pc_offset;
+                }
+            }
             OP_LD => (),
             OP_LDI => {
                 let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
