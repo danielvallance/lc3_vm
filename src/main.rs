@@ -236,7 +236,13 @@ fn main() {
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
-            OP_ST => (),
+            OP_ST => {
+                let src_reg = ((instruction >> 9) & 0x7) as usize; /* Register containing value to be stored */
+
+                /* Destination address calculated by adding pc_offset to PC */
+                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                memory[(registers[RPC] + pc_offset) as usize] = registers[src_reg];
+            }
             OP_STI => (),
             OP_STR => (),
             OP_TRAP => (),
