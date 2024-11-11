@@ -217,7 +217,16 @@ fn main() {
                 registers[dst_reg] = memory[memory[(registers[RPC] + pc_offset) as usize] as usize];
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
-            OP_LDR => (),
+            OP_LDR => {
+                let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
+
+                /* The value in the base register, added to an offset, point to the value to be loaded */
+                let base_reg = ((instruction >> 6) & 0x7) as usize;
+                let offset = sign_extend(instruction & 0x3f, 6);
+                registers[dst_reg] = memory[(registers[base_reg] + offset) as usize];
+
+                update_flags(registers[dst_reg], &mut registers[RCOND]);
+            }
             OP_LEA => (),
             OP_ST => (),
             OP_STI => (),
