@@ -243,7 +243,13 @@ fn main() {
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
                 memory[(registers[RPC] + pc_offset) as usize] = registers[src_reg];
             }
-            OP_STI => (),
+            OP_STI => {
+                let src_reg = ((instruction >> 9) & 0x7) as usize; /* Register containing value to be stored */
+
+                /* Add pc_offset to PC to get address of address at which value should be stored */
+                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                memory[memory[(registers[RPC] + pc_offset) as usize] as usize] = registers[src_reg];
+            }
             OP_STR => (),
             OP_TRAP => (),
             OP_RES => exit(1), /* Not implemented */
