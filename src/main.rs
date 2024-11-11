@@ -182,7 +182,10 @@ fn main() {
                     registers[RPC] += pc_offset;
                 }
             }
-            OP_JMP => (),
+            OP_JMP => {
+                let base_reg = ((instruction >> 6) & 0x7) as usize; /* Register which contains position to jump to */
+                registers[RPC] = registers[base_reg]; /* Jump to specified location */
+            }
             OP_JSR => (),
             OP_LD => (),
             OP_LDI => {
