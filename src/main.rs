@@ -5,7 +5,13 @@
 //! https://www.jmeiners.com/lc3-vm/ and I am doing
 //! this as a learning exercise
 
-use std::{env, fs::read, process::exit};
+use core::ascii;
+use std::{
+    env,
+    fs::read,
+    io::{stdout, Write},
+    process::exit,
+};
 
 /* The LC-3 architecture contains 65536 memory locations */
 const MEMORY_MAX: usize = 1 << 16;
@@ -62,6 +68,14 @@ const OP_COUNT: u16 = 16; /* UNUSED: Number of opcodes */
 const FL_POS: u16 = 1 << 0; /* Positive */
 const FL_ZRO: u16 = 1 << 1; /* Zero */
 const FL_NEG: u16 = 1 << 2; /* Negative */
+
+/* Trap codes */
+const TRAP_GETC: u16 = 0x20; /* Get character from keyboard, not echoed onto the terminal */
+const TRAP_OUT: u16 = 0x21; /* Output a character */
+const TRAP_PUTS: u16 = 0x22; /* Output a word string */
+const TRAP_IN: u16 = 0x23; /* Get character from keyboard, echoed onto the terminal */
+const TRAP_PUTSP: u16 = 0x24; /* Output a byte string */
+const TRAP_HALT: u16 = 0x25; /* Halt the program */
 
 fn read_image(_image_path: &str) -> bool {
     true
@@ -258,7 +272,37 @@ fn main() {
                 let offset = sign_extend(instruction & 0x3f, 6);
                 memory[(registers[base_reg] + offset) as usize] = registers[src_reg];
             }
-            OP_TRAP => (),
+            OP_TRAP => {
+                registers[R7] = registers[RPC]; /* Store program counter */
+
+                match instruction & 0xff {
+                    TRAP_GETC => (),
+                    TRAP_OUT => (),
+                    TRAP_PUTS => {
+                        /*
+                         * Iterate though NULL terminated string where the first
+                         * character is stored at address in R0
+                         */
+                        for &ch in memory[registers[R0] as usize..].iter() {
+                            if ch == 0 {
+                                break;
+                            }
+                            /* C implementation uses putc, so I decided to only treat ascii characters here */
+                            print!("{}", ascii::escape_default(ch as u8));
+                        }
+
+                        /* Attempt to flush */
+                        if stdout().flush().is_err() {
+                            println!("Could not execute puts trap. Quitting.\n");
+                            running = false;
+                        }
+                    }
+                    TRAP_IN => (),
+                    TRAP_PUTSP => (),
+                    TRAP_HALT => (),
+                    _ => exit(1), /* Trap code not implemented */
+                }
+            }
             OP_RES => exit(1), /* Not implemented */
             OP_RTI => exit(1), /* Not implemented */
             _ => exit(1),
