@@ -289,7 +289,15 @@ fn main() {
 
                         update_flags(registers[R0], &mut registers[RCOND]);
                     }
-                    TRAP_OUT => (),
+                    TRAP_OUT => {
+                        /* C implementation uses putc, so I decided to only treat ascii characters here */
+                        print!("{}", ascii::escape_default(registers[R0] as u8));
+                        /* Attempt to flush */
+                        if stdout().flush().is_err() {
+                            println!("Could not execute out trap. Quitting.\n");
+                            running = false;
+                        }
+                    }
                     TRAP_PUTS => {
                         /*
                          * Iterate though NULL terminated string where the first
