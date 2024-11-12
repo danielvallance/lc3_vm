@@ -7,9 +7,8 @@
 
 use core::ascii;
 use std::{
-    env,
-    fs::read,
-    io::{stdout, Write},
+    char, env,
+    io::{stdin, stdout, Read, Write},
     process::exit,
 };
 
@@ -276,7 +275,20 @@ fn main() {
                 registers[R7] = registers[RPC]; /* Store program counter */
 
                 match instruction & 0xff {
-                    TRAP_GETC => (),
+                    TRAP_GETC => {
+                        /* Get u8 ascii character from standard input */
+                        registers[R0] = match stdin().bytes().next() {
+                            Some(Ok(ch)) => ch as u16,
+                            Some(Err(_)) => {
+                                println!("Could not execute getc trap. Quitting.\n");
+                                running = false;
+                                break;
+                            }
+                            None => 0xffff, /* EOF value */
+                        };
+
+                        update_flags(registers[R0], &mut registers[RCOND]);
+                    }
                     TRAP_OUT => (),
                     TRAP_PUTS => {
                         /*
