@@ -307,7 +307,11 @@ fn main() {
                             if ch == 0 {
                                 break;
                             }
-                            /* C implementation uses putc, so I decided to only treat ascii characters here */
+                            /*
+                             * C implementation uses putc, so I decided to only treat ascii characters here
+                             *
+                             * Specification of this trap states that there is one ascii character per 16 bit word
+                             */
                             print!("{}", ascii::escape_default(ch as u8));
                         }
 
@@ -341,7 +345,36 @@ fn main() {
                         registers[R0] = ch as u16;
                         update_flags(registers[R0], &mut registers[RCOND]);
                     }
-                    TRAP_PUTSP => (),
+                    TRAP_PUTSP => {
+                        /*
+                         * Iterate though NULL terminated string where the first
+                         * character is stored at address in R0
+                         */
+                        for &word in memory[registers[R0] as usize..].iter() {
+                            let char1 = (word & 0xff) as u8;
+                            if char1 == 0 {
+                                break;
+                            }
+                            /*
+                             * C implementation uses putc, so I decided to only treat ascii characters here
+                             *
+                             * Specification of this trap states that there are two ascii characters per 16 bit word
+                             */
+                            print!("{}", ascii::escape_default(char1));
+
+                            let char2 = (word >> 8) as u8;
+                            if char2 == 0 {
+                                break;
+                            }
+                            print!("{}", ascii::escape_default(char1));
+                        }
+
+                        /* Attempt to flush */
+                        if stdout().flush().is_err() {
+                            println!("Could not execute putsp trap. Quitting.\n");
+                            running = false;
+                        }
+                    }
                     TRAP_HALT => {
                         println!("Halting.");
                         running = false;
