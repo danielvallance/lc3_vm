@@ -317,7 +317,30 @@ fn main() {
                             running = false;
                         }
                     }
-                    TRAP_IN => (),
+                    TRAP_IN => {
+                        println!("Enter a character: ");
+                        let ch = match stdin().bytes().next() {
+                            Some(Ok(ch)) => ch as u16,
+                            Some(Err(_)) => {
+                                println!("Could not execute in trap. Quitting.\n");
+                                running = false;
+                                break;
+                            }
+                            None => break, /* EOF value */
+                        } as u8;
+
+                        /* C implementation uses putc, so I decided to only treat ascii characters here */
+                        print!("{}", ascii::escape_default(registers[R0] as u8));
+
+                        /* Attempt to flush */
+                        if stdout().flush().is_err() {
+                            println!("Could not execute in trap. Quitting.\n");
+                            running = false;
+                        }
+
+                        registers[R0] = ch as u16;
+                        update_flags(registers[R0], &mut registers[RCOND]);
+                    }
                     TRAP_PUTSP => (),
                     TRAP_HALT => (),
                     _ => exit(1), /* Trap code not implemented */
