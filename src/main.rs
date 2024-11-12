@@ -342,7 +342,10 @@ fn main() {
                         update_flags(registers[R0], &mut registers[RCOND]);
                     }
                     TRAP_PUTSP => (),
-                    TRAP_HALT => (),
+                    TRAP_HALT => {
+                        println!("Halting.");
+                        running = false;
+                    }
                     _ => exit(1), /* Trap code not implemented */
                 }
             }
