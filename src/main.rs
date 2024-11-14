@@ -7,7 +7,9 @@
 
 use core::ascii;
 use std::{
-    char, env,
+    env,
+    error::Error,
+    fs::File,
     io::{stdin, stdout, Read, Write},
     process::exit,
 };
@@ -76,8 +78,36 @@ const TRAP_IN: u16 = 0x23; /* Get character from keyboard, echoed onto the termi
 const TRAP_PUTSP: u16 = 0x24; /* Output a byte string */
 const TRAP_HALT: u16 = 0x25; /* Halt the program */
 
-fn read_image(_image_path: &str) -> bool {
-    true
+/// Loads encoded LC3 assembly from file to memory
+fn read_image(image_path: &str, memory: &mut [u16]) -> Result<(), Box<dyn Error>> {
+    /* Read image file */
+    let mut image_file = File::open(image_path)?;
+    let mut buf = Vec::new();
+    let len = image_file.read_to_end(&mut buf)?;
+
+    /* Image must be at least 2 bytes, and an even number of bytes */
+    if len < 2 || len % 2 == 1 {
+        Err(format!("Image at {} is not valid LC3 format\n", image_path))?
+    }
+
+    /* Get origin which indicates memory location to which the instructions in the image should be loaded */
+    let origin: u16 = buf_to_little_endian_u16(&buf[..2]);
+
+    /* If image size cannot be loaded into memory, fail */
+    if len > MEMORY_MAX - origin as usize {
+        Err(format!("Not enough memory for image: {}\n", image_path))?
+    }
+
+    for (idx, instruction) in buf[2..].chunks(2).enumerate() {
+        memory[origin as usize + idx] = buf_to_little_endian_u16(instruction)
+    }
+
+    Ok(())
+}
+
+/// Convert big-endian u16 in buffer to little-endian u16
+fn buf_to_little_endian_u16(buf: &[u8]) -> u16 {
+    buf[1] as u16 | buf[0] as u16
 }
 
 fn sign_extend(mut operand: u16, no_of_bits: u8) -> u16 {
@@ -101,23 +131,22 @@ fn update_flags(new_reg_value: u16, r_cond: &mut u16) {
 fn main() {
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        println!("Usage: lc3_vm <image_file_1> [another_image_file]*");
+    if args.len() != 2 {
+        println!("Usage: lc3_vm <image_file>\n");
         exit(1);
     }
 
-    /* Read image file(s) */
-    for arg in args {
-        if !read_image(&arg) {
-            println!("Could not read image: {}", arg);
-            exit(1);
-        }
-    }
     /* Memory is stored in this array */
     let mut memory: [u16; MEMORY_MAX] = [0; MEMORY_MAX];
 
     /* Register values are stored in this array */
     let mut registers: [u16; RCOUNT] = [0; RCOUNT];
+
+    /* Read image file */
+    if let Err(e) = read_image(&args[1], &mut memory) {
+        println!("Could not read image: {}\n", e);
+        exit(1);
+    }
 
     /*
      * Exactly one condition flag is set in RCOND
