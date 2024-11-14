@@ -78,6 +78,8 @@ const TRAP_IN: u16 = 0x23; /* Get character from keyboard, echoed onto the termi
 const TRAP_PUTSP: u16 = 0x24; /* Output a byte string */
 const TRAP_HALT: u16 = 0x25; /* Halt the program */
 
+const EOF: i16 = -1;
+
 /// Loads encoded LC3 assembly from file to memory
 fn read_image(image_path: &str, memory: &mut [u16]) -> Result<(), Box<dyn Error>> {
     /* Read image file */
@@ -125,6 +127,14 @@ fn update_flags(new_reg_value: u16, r_cond: &mut u16) {
         *r_cond = FL_NEG;
     } else {
         *r_cond = FL_POS;
+    }
+}
+
+/// Gets character from standard input, or returns EOF
+fn get_char() -> Result<i16, Box<dyn Error>> {
+    match stdin().bytes().next() {
+        Some(ch) => Ok(ch? as i16),
+        None => Ok(EOF), /* If no character on stdin, return EOF */
     }
 }
 
@@ -306,14 +316,10 @@ fn main() {
                 match instruction & 0xff {
                     TRAP_GETC => {
                         /* Get u8 ascii character from standard input */
-                        registers[R0] = match stdin().bytes().next() {
-                            Some(Ok(ch)) => ch as u16,
-                            Some(Err(_)) => {
-                                println!("Could not execute getc trap. Quitting.\n");
-                                running = false;
-                                break;
-                            }
-                            None => 0xffff, /* EOF value */
+                        registers[R0] = match get_char() {
+                            Ok(EOF) => EOF as u16, /* EOF */
+                            Ok(ch) => ch as u16,
+                            Err(_) => EOF as u16, /* Upon error, give up on getting input by storing EOF, and continue */
                         };
 
                         update_flags(registers[R0], &mut registers[RCOND]);
@@ -352,14 +358,10 @@ fn main() {
                     }
                     TRAP_IN => {
                         println!("Enter a character: ");
-                        let ch = match stdin().bytes().next() {
-                            Some(Ok(ch)) => ch as u16,
-                            Some(Err(_)) => {
-                                println!("Could not execute in trap. Quitting.\n");
-                                running = false;
-                                break;
-                            }
-                            None => break, /* EOF value */
+                        let ch = match get_char() {
+                            Ok(EOF) => continue, /* On EOF, give up on getting input and continue */
+                            Ok(ch) => ch as u16,
+                            Err(_) => continue, /* On error, give up on getting input and continue */
                         } as u8;
 
                         /* C implementation uses putc, so I decided to only treat ascii characters here */
