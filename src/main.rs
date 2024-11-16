@@ -203,6 +203,9 @@ fn main() {
         exit(1);
     }
 
+    /* Set interrupt handler */
+    ctrlc::set_handler(|| println!("Received SIGINT")).expect("Error setting SIGINT handler");
+
     /* Memory is stored in this array */
     let mut memory: [u16; MEMORY_MAX] = [0; MEMORY_MAX];
 
