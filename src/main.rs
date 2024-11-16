@@ -16,6 +16,8 @@ use std::{
     process::exit,
 };
 
+use termios::{tcsetattr, Termios, ECHO, ICANON, TCSANOW};
+
 /* The LC-3 architecture contains 65536 memory locations */
 const MEMORY_MAX: usize = 1 << 16;
 
@@ -122,6 +124,33 @@ fn buf_to_little_endian_u16(buf: &[u8]) -> u16 {
     buf[1] as u16 | buf[0] as u16
 }
 
+/// Apply/remove terminal settings which VM requires
+///
+/// When VM is running, input should be processed character
+/// by character, and not echoed back to output
+fn toggle_vm_terminal(vm_running: bool) -> Result<(), Box<dyn Error>> {
+    /* Get terminal settings struct */
+    let stdin_fd = stdin().as_raw_fd();
+    let mut termios = Termios::from_fd(stdin_fd)?;
+
+    /*
+     * If VM is running, process input character by character,
+     * and stop echoing input characters.
+     *
+     * If VM is not running, revert these changes.
+     *
+     * Apply changes immediately
+     */
+    if vm_running {
+        termios.c_lflag &= !(ICANON | ECHO);
+    } else {
+        termios.c_lflag |= ICANON | ECHO;
+    }
+    tcsetattr(stdin_fd, TCSANOW, &termios)?;
+
+    Ok(())
+}
+
 /// Setter for memory array
 fn mem_write(memory: &mut [u16], address: usize, value: u16) {
     /* Disallow direct writes to the memory mapped registers */
@@ -212,11 +241,24 @@ fn main() {
 
     if args.len() != 2 {
         println!("Usage: lc3_vm <image_file>\n");
+        /* TODO: Convert to returning ExitCode */
         exit(1);
     }
 
     /* Set interrupt handler */
-    ctrlc::set_handler(|| println!("Received SIGINT")).expect("Error setting SIGINT handler");
+    ctrlc::set_handler(|| {
+        /* Re-enable input buffering in terminal */
+        let _ = toggle_vm_terminal(false);
+        println!();
+        exit(2);
+    })
+    .expect("Error setting SIGINT handler\n");
+
+    /* Disable input buffering in terminal */
+    if toggle_vm_terminal(true).is_err() {
+        println!("Could not apply changes to terminal buffering settings. Quitting.");
+        exit(1);
+    }
 
     /* Memory is stored in this array */
     let mut memory: [u16; MEMORY_MAX] = [0; MEMORY_MAX];
@@ -227,6 +269,8 @@ fn main() {
     /* Read image file */
     if let Err(e) = read_image(&args[1], &mut memory) {
         println!("Could not read image: {}\n", e);
+        /* Re-enable input buffering */
+        toggle_vm_terminal(false).unwrap();
         exit(1);
     }
 
@@ -494,13 +538,20 @@ fn main() {
                         println!("Halting.");
                         running = false;
                     }
-                    _ => exit(1), /* Trap code not implemented */
+                    /* TODO: logging when encountering unrecognised trap or instruction */
+                    _ => break, /* Trap code not implemented */
                 }
             }
-            OP_RES => exit(1), /* Not implemented */
-            OP_RTI => exit(1), /* Not implemented */
-            _ => exit(1),
+            OP_RES => break, /* Not implemented */
+            OP_RTI => break, /* Not implemented */
+            _ => break,
         }
         running = false; /* Terminate the loop */
+    }
+
+    /* Re-enable input buffering in terminal */
+    if toggle_vm_terminal(false).is_err() {
+        println!("Could not apply changes to terminal buffering settings. Quitting.");
+        exit(1);
     }
 }
