@@ -36,6 +36,10 @@ const RPC: usize = 8; /* Program counter */
 const RCOND: usize = 9; /* Condition flag register */
 const RCOUNT: usize = 10; /* UNUSED: Number of registers */
 
+/* Memory mapped registers */
+const MR_KBSR: usize = 0xFE00; /* Keyboard status */
+const MR_KBDR: usize = 0xFE02; /* Keyboard data */
+
 /* Program Counter's default starting position */
 const PC_START: u16 = 0x3000;
 
@@ -101,7 +105,11 @@ fn read_image(image_path: &str, memory: &mut [u16]) -> Result<(), Box<dyn Error>
     }
 
     for (idx, instruction) in buf[2..].chunks(2).enumerate() {
-        memory[origin as usize + idx] = buf_to_little_endian_u16(instruction)
+        mem_write(
+            memory,
+            origin as usize + idx,
+            buf_to_little_endian_u16(instruction),
+        );
     }
 
     Ok(())
@@ -110,6 +118,55 @@ fn read_image(image_path: &str, memory: &mut [u16]) -> Result<(), Box<dyn Error>
 /// Convert big-endian u16 in buffer to little-endian u16
 fn buf_to_little_endian_u16(buf: &[u8]) -> u16 {
     buf[1] as u16 | buf[0] as u16
+}
+
+/// Setter for memory array
+fn mem_write(memory: &mut [u16], address: usize, value: u16) {
+    /* Disallow direct writes to the memory mapped registers */
+    if address == MR_KBDR || address == MR_KBSR {
+        return;
+    }
+    memory[address] = value;
+}
+
+/// Getter for memory array
+fn mem_read(memory: &mut [u16], address: usize) -> u16 {
+    /*
+     * If trying to read from keyboard status register
+     * then check the keyboard and update keyboard
+     * status and data registers accordingly
+     *
+     * If the user wishes to read the keyboard data register, they must
+     * read from the keyboard status register first to check if there
+     * is any key is being pressed, and if so, the act of reading from
+     * the status register will load the pressed key into the keyboard
+     * data register
+     */
+    if address == MR_KBSR {
+        if check_key() {
+            /*
+             * If key pressed, record this in keyboard status register
+             * and put pressed character in keyboard data register
+             */
+            memory[MR_KBSR] = 1 << 15;
+            /* Since a key has been pressed, the keyboard data register should NOT store EOF */
+            memory[MR_KBDR] = match get_char() {
+                Ok(EOF) => EOF as u16,
+                Ok(ch) => ch as u16,
+                Err(_) => EOF as u16, /* On error, give up on getting input and store EOF */
+            };
+        } else {
+            /* Otherwise, record that no key is being pressed */
+            memory[MR_KBSR] = 0;
+        }
+    }
+
+    memory[address]
+}
+
+/// Returns if a key is currently being pressed
+fn check_key() -> bool {
+    false
 }
 
 fn sign_extend(mut operand: u16, no_of_bits: u8) -> u16 {
@@ -171,7 +228,7 @@ fn main() {
     let mut running = true;
     while running {
         /* Fetch instruction at PC's address */
-        let instruction = memory[registers[RPC] as usize];
+        let instruction = mem_read(&mut memory, registers[RPC] as usize);
 
         /* Get opcode which is stored in first 4 bits of instruction */
         let op = instruction >> 12;
@@ -256,7 +313,7 @@ fn main() {
 
                 /* Get PC offset, add to PC, and load value at the resulting memory location to dst_reg */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                registers[dst_reg] = memory[(registers[RPC] + pc_offset) as usize];
+                registers[dst_reg] = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize);
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
@@ -266,7 +323,8 @@ fn main() {
                 let pc_offset = sign_extend(instruction & 0x1FF, 9);
 
                 /* Load value at address referred to in address of the PC, combined with pc_offset */
-                registers[dst_reg] = memory[memory[(registers[RPC] + pc_offset) as usize] as usize];
+                let address = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize) as usize;
+                registers[dst_reg] = mem_read(&mut memory, address);
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
             OP_LDR => {
@@ -275,7 +333,7 @@ fn main() {
                 /* The value in the base register, added to an offset, point to the value to be loaded */
                 let base_reg = ((instruction >> 6) & 0x7) as usize;
                 let offset = sign_extend(instruction & 0x3f, 6);
-                registers[dst_reg] = memory[(registers[base_reg] + offset) as usize];
+                registers[dst_reg] = mem_read(&mut memory, (registers[base_reg] + offset) as usize);
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
@@ -284,7 +342,7 @@ fn main() {
 
                 /* Get PC offset from the instruction, and add to PC to get address of value */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                registers[dst_reg] = memory[(registers[RPC] + pc_offset) as usize];
+                registers[dst_reg] = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize);
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
@@ -293,14 +351,19 @@ fn main() {
 
                 /* Destination address calculated by adding pc_offset to PC */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                memory[(registers[RPC] + pc_offset) as usize] = registers[src_reg];
+                mem_write(
+                    &mut memory,
+                    (registers[RPC] + pc_offset) as usize,
+                    registers[src_reg],
+                );
             }
             OP_STI => {
                 let src_reg = ((instruction >> 9) & 0x7) as usize; /* Register containing value to be stored */
 
                 /* Add pc_offset to PC to get address of address at which value should be stored */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                memory[memory[(registers[RPC] + pc_offset) as usize] as usize] = registers[src_reg];
+                let address = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize) as usize;
+                mem_write(&mut memory, address, registers[src_reg]);
             }
             OP_STR => {
                 let src_reg = ((instruction >> 9) & 0x7) as usize; /* Register containing value to be stored */
@@ -308,7 +371,11 @@ fn main() {
                 /* Destination address calculated by adding offset to base_reg */
                 let base_reg = ((instruction >> 6) & 0x7) as usize;
                 let offset = sign_extend(instruction & 0x3f, 6);
-                memory[(registers[base_reg] + offset) as usize] = registers[src_reg];
+                mem_write(
+                    &mut memory,
+                    (registers[base_reg] + offset) as usize,
+                    registers[src_reg],
+                );
             }
             OP_TRAP => {
                 registers[R7] = registers[RPC]; /* Store program counter */
@@ -338,7 +405,8 @@ fn main() {
                          * Iterate though NULL terminated string where the first
                          * character is stored at address in R0
                          */
-                        for &ch in memory[registers[R0] as usize..].iter() {
+                        for address in registers[R0] as usize..MEMORY_MAX {
+                            let ch = mem_read(&mut memory, address) as u8;
                             if ch == 0 {
                                 break;
                             }
@@ -381,7 +449,8 @@ fn main() {
                          * Iterate though NULL terminated string where the first
                          * character is stored at address in R0
                          */
-                        for &word in memory[registers[R0] as usize..].iter() {
+                        for i in (registers[R0] as usize)..MEMORY_MAX {
+                            let word = mem_read(&mut memory, i);
                             let char1 = (word & 0xff) as u8;
                             if char1 == 0 {
                                 break;
