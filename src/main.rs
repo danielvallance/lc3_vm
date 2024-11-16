@@ -291,7 +291,7 @@ fn main() {
         let instruction = mem_read(&mut memory, registers[RPC] as usize);
 
         /* Increment program counter */
-        registers[RPC] += 1;
+        registers[RPC] = registers[RPC].wrapping_add(1);
 
         /* Get opcode which is stored in first 4 bits of instruction */
         let op = instruction >> 12;
@@ -309,11 +309,11 @@ fn main() {
                 if imm_mode {
                     /* Immediate mode means the second operand is encoded in the instruction itself */
                     let imm_operand = sign_extend(instruction & 0x1f, 5);
-                    registers[dst_reg] = registers[src_reg_1] + imm_operand;
+                    registers[dst_reg] = registers[src_reg_1].wrapping_add(imm_operand);
                 } else {
                     /* If immediate mode is not being used, the instruction refers to a second destination register */
                     let src_reg_2 = (instruction & 0x7) as usize;
-                    registers[dst_reg] = registers[src_reg_1] + registers[src_reg_2];
+                    registers[dst_reg] = registers[src_reg_1].wrapping_add(registers[src_reg_2]);
                 }
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
@@ -351,7 +351,7 @@ fn main() {
                 if (condition_flags & registers[RCOND]) != 0 {
                     /* Branch by adding the sign extended PC offset to the PC */
                     let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                    registers[RPC] += pc_offset;
+                    registers[RPC] = registers[RPC].wrapping_add(pc_offset);
                 }
             }
             OP_JMP => {
@@ -368,7 +368,7 @@ fn main() {
                 /* If the bit is 1, jump to the address encoded in the instruction itself */
                 } else {
                     let pc_offset = sign_extend(instruction & 0x7ff, 11);
-                    registers[RPC] += pc_offset;
+                    registers[RPC] = registers[RPC].wrapping_add(pc_offset);
                 }
             }
             OP_LD => {
@@ -376,7 +376,8 @@ fn main() {
 
                 /* Get PC offset, add to PC, and load value at the resulting memory location to dst_reg */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                registers[dst_reg] = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize);
+                registers[dst_reg] =
+                    mem_read(&mut memory, registers[RPC].wrapping_add(pc_offset) as usize);
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
@@ -386,7 +387,8 @@ fn main() {
                 let pc_offset = sign_extend(instruction & 0x1FF, 9);
 
                 /* Load value at address referred to in address of the PC, combined with pc_offset */
-                let address = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize) as usize;
+                let address =
+                    mem_read(&mut memory, registers[RPC].wrapping_add(pc_offset) as usize) as usize;
                 registers[dst_reg] = mem_read(&mut memory, address);
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
@@ -396,7 +398,10 @@ fn main() {
                 /* The value in the base register, added to an offset, point to the value to be loaded */
                 let base_reg = ((instruction >> 6) & 0x7) as usize;
                 let offset = sign_extend(instruction & 0x3f, 6);
-                registers[dst_reg] = mem_read(&mut memory, (registers[base_reg] + offset) as usize);
+                registers[dst_reg] = mem_read(
+                    &mut memory,
+                    registers[base_reg].wrapping_add(offset) as usize,
+                );
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
@@ -405,7 +410,7 @@ fn main() {
 
                 /* Get PC offset from the instruction, and add to PC to get address of value */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                registers[dst_reg] = registers[RPC] + pc_offset;
+                registers[dst_reg] = registers[RPC].wrapping_add(pc_offset);
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
@@ -416,7 +421,7 @@ fn main() {
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
                 mem_write(
                     &mut memory,
-                    (registers[RPC] + pc_offset) as usize,
+                    registers[RPC].wrapping_add(pc_offset) as usize,
                     registers[src_reg],
                 );
             }
@@ -425,7 +430,8 @@ fn main() {
 
                 /* Add pc_offset to PC to get address of address at which value should be stored */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                let address = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize) as usize;
+                let address =
+                    mem_read(&mut memory, registers[RPC].wrapping_add(pc_offset) as usize) as usize;
                 mem_write(&mut memory, address, registers[src_reg]);
             }
             OP_STR => {
@@ -436,7 +442,7 @@ fn main() {
                 let offset = sign_extend(instruction & 0x3f, 6);
                 mem_write(
                     &mut memory,
-                    (registers[base_reg] + offset) as usize,
+                    (registers[base_reg].wrapping_add(offset)) as usize, /* TODO: Fix rest of wrapping_adds */
                     registers[src_reg],
                 );
             }
