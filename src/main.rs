@@ -496,7 +496,7 @@ fn main() {
                         } as u8;
 
                         /* C implementation uses putc, so I decided to only treat ascii characters here */
-                        print!("{}", ascii::escape_default(registers[R0] as u8));
+                        print!("{}", ascii::escape_default(ch));
 
                         /* Attempt to flush */
                         if stdout().flush().is_err() {
