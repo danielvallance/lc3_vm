@@ -28,6 +28,7 @@ const MEMORY_MAX: usize = 1 << 16;
  * They are all 16 bits (the size of a word in this architecture)
  */
 /* General purpose registers */
+/* TODO: Convert to enum */
 const R0: usize = 0;
 const R1: usize = 1;
 const R2: usize = 2;
@@ -121,7 +122,7 @@ fn read_image(image_path: &str, memory: &mut [u16]) -> Result<(), Box<dyn Error>
 
 /// Convert big-endian u16 in buffer to little-endian u16
 fn buf_to_little_endian_u16(buf: &[u8]) -> u16 {
-    buf[1] as u16 | buf[0] as u16
+    ((buf[0] as u16) << 8) | (buf[1] as u16)
 }
 
 /// Apply/remove terminal settings which VM requires
@@ -404,7 +405,7 @@ fn main() {
 
                 /* Get PC offset from the instruction, and add to PC to get address of value */
                 let pc_offset = sign_extend(instruction & 0x1ff, 9);
-                registers[dst_reg] = mem_read(&mut memory, (registers[RPC] + pc_offset) as usize);
+                registers[dst_reg] = registers[RPC] + pc_offset;
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
             }
