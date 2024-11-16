@@ -6,11 +6,13 @@
 //! this as a learning exercise
 
 use core::ascii;
+use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use std::{
     env,
     error::Error,
     fs::File,
     io::{stdin, stdout, Read, Write},
+    os::fd::{AsFd, AsRawFd},
     process::exit,
 };
 
@@ -166,7 +168,17 @@ fn mem_read(memory: &mut [u16], address: usize) -> u16 {
 
 /// Returns if a key is currently being pressed
 fn check_key() -> bool {
-    false
+    /*
+     * Use the nix poll function to check if the stdin file descriptor
+     * has any input and therefore if there is a key being pressed
+     */
+    let stdin = stdin();
+    let poll_stdin_fd = PollFd::new(stdin.as_fd(), PollFlags::POLLIN);
+
+    match poll(&mut [poll_stdin_fd], PollTimeout::from(0u8)) {
+        Ok(n) => n > 0,
+        Err(_) => false, /* On error, say there is no data to read and return false */
+    }
 }
 
 fn sign_extend(mut operand: u16, no_of_bits: u8) -> u16 {
