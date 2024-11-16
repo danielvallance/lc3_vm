@@ -462,7 +462,7 @@ fn main() {
                     }
                     TRAP_OUT => {
                         /* C implementation uses putc, so I decided to only treat ascii characters here */
-                        print!("{}", ascii::escape_default(registers[R0] as u8));
+                        print!("{}", (registers[R0] as u8) as char);
                         /* Attempt to flush */
                         if stdout().flush().is_err() {
                             println!("Could not execute out trap. Quitting.\n");
@@ -475,8 +475,8 @@ fn main() {
                          * character is stored at address in R0
                          */
                         for address in registers[R0] as usize..MEMORY_MAX {
-                            let ch = mem_read(&mut memory, address) as u8;
-                            if ch == 0 {
+                            let ch = (mem_read(&mut memory, address) as u8) as char;
+                            if ch == '\0' {
                                 break;
                             }
                             /*
@@ -484,7 +484,7 @@ fn main() {
                              *
                              * Specification of this trap states that there is one ascii character per 16 bit word
                              */
-                            print!("{}", ascii::escape_default(ch as u8));
+                            print!("{}", ch);
                         }
 
                         /* Attempt to flush */
@@ -499,10 +499,10 @@ fn main() {
                             Ok(EOF) => continue, /* On EOF, give up on getting input and continue */
                             Ok(ch) => ch as u16,
                             Err(_) => continue, /* On error, give up on getting input and continue */
-                        } as u8;
+                        } as u8 as char;
 
                         /* C implementation uses putc, so I decided to only treat ascii characters here */
-                        print!("{}", ascii::escape_default(ch));
+                        print!("{}", ch);
 
                         /* Attempt to flush */
                         if stdout().flush().is_err() {
@@ -520,8 +520,8 @@ fn main() {
                          */
                         for i in (registers[R0] as usize)..MEMORY_MAX {
                             let word = mem_read(&mut memory, i);
-                            let char1 = (word & 0xff) as u8;
-                            if char1 == 0 {
+                            let char1 = ((word & 0xff) as u8) as char;
+                            if char1 == '\0' {
                                 break;
                             }
                             /*
@@ -529,13 +529,13 @@ fn main() {
                              *
                              * Specification of this trap states that there are two ascii characters per 16 bit word
                              */
-                            print!("{}", ascii::escape_default(char1));
+                            print!("{}", char1);
 
                             let char2 = (word >> 8) as u8;
                             if char2 == 0 {
                                 break;
                             }
-                            print!("{}", ascii::escape_default(char1));
+                            print!("{}", char1);
                         }
 
                         /* Attempt to flush */
