@@ -289,6 +289,9 @@ fn main() {
         /* Fetch instruction at PC's address */
         let instruction = mem_read(&mut memory, registers[RPC] as usize);
 
+        /* Increment program counter */
+        registers[RPC] += 1;
+
         /* Get opcode which is stored in first 4 bits of instruction */
         let op = instruction >> 12;
 
@@ -546,7 +549,6 @@ fn main() {
             OP_RTI => break, /* Not implemented */
             _ => break,
         }
-        running = false; /* Terminate the loop */
     }
 
     /* Re-enable input buffering in terminal */
