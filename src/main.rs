@@ -5,7 +5,6 @@
 //! https://www.jmeiners.com/lc3-vm/ and I am doing
 //! this as a learning exercise
 
-use core::ascii;
 use nix::poll::{poll, PollFd, PollFlags, PollTimeout};
 use std::{
     env,
@@ -13,9 +12,8 @@ use std::{
     fs::File,
     io::{stdin, stdout, Read, Write},
     os::fd::{AsFd, AsRawFd},
-    process::exit,
+    process::{exit, ExitCode},
 };
-
 use termios::{tcsetattr, Termios, ECHO, ICANON, TCSANOW};
 
 /* The LC-3 architecture contains 65536 memory locations */
@@ -28,7 +26,6 @@ const MEMORY_MAX: usize = 1 << 16;
  * They are all 16 bits (the size of a word in this architecture)
  */
 /* General purpose registers */
-/* TODO: Convert to enum */
 const R0: usize = 0;
 const R1: usize = 1;
 const R2: usize = 2;
@@ -65,7 +62,6 @@ const OP_JMP: u16 = 12; /* Jump */
 const OP_RES: u16 = 13; /* Reserved (unused) */
 const OP_LEA: u16 = 14; /* Load effective address */
 const OP_TRAP: u16 = 15; /* Execute trap */
-const OP_COUNT: u16 = 16; /* UNUSED: Number of opcodes */
 
 /*
  * The LC-3 architecture uses the following flags
@@ -120,7 +116,7 @@ fn read_image(image_path: &str, memory: &mut [u16]) -> Result<(), Box<dyn Error>
     Ok(())
 }
 
-/// Convert big-endian u16 in buffer to little-endian u16
+/// Convert two u8 bytes in buffer to little-endian u16
 fn buf_to_little_endian_u16(buf: &[u8]) -> u16 {
     ((buf[0] as u16) << 8) | (buf[1] as u16)
 }
@@ -211,6 +207,8 @@ fn check_key() -> bool {
     }
 }
 
+/// Pads the operand out to 16 bits, using 0 padding
+/// for positive numbers and 1 padding for negative
 fn sign_extend(mut operand: u16, no_of_bits: u8) -> u16 {
     if (operand >> (no_of_bits - 1)) == 1 {
         operand |= 0xFFFF << no_of_bits
@@ -218,6 +216,9 @@ fn sign_extend(mut operand: u16, no_of_bits: u8) -> u16 {
     operand
 }
 
+/// Update the condition flags based off the result
+/// of the previous calculation (which is passed as
+/// an argument)
 fn update_flags(new_reg_value: u16, r_cond: &mut u16) {
     if new_reg_value == 0 {
         *r_cond = FL_ZRO;
@@ -237,13 +238,12 @@ fn get_char() -> Result<i16, Box<dyn Error>> {
     }
 }
 
-fn main() {
+fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
 
     if args.len() != 2 {
         println!("Usage: lc3_vm <image_file>\n");
-        /* TODO: Convert to returning ExitCode */
-        exit(1);
+        return ExitCode::FAILURE;
     }
 
     /* Set interrupt handler */
@@ -258,7 +258,7 @@ fn main() {
     /* Disable input buffering in terminal */
     if toggle_vm_terminal(true).is_err() {
         println!("Could not apply changes to terminal buffering settings. Quitting.");
-        exit(1);
+        return ExitCode::FAILURE;
     }
 
     /* Memory is stored in this array */
@@ -272,7 +272,7 @@ fn main() {
         println!("Could not read image: {}\n", e);
         /* Re-enable input buffering */
         toggle_vm_terminal(false).unwrap();
-        exit(1);
+        return ExitCode::FAILURE;
     }
 
     /*
@@ -308,7 +308,7 @@ fn main() {
 
                 if imm_mode {
                     /* Immediate mode means the second operand is encoded in the instruction itself */
-                    let imm_operand = sign_extend(instruction & 0x1f, 5);
+                    let imm_operand = sign_extend(instruction & 0x1F, 5);
                     registers[dst_reg] = registers[src_reg_1].wrapping_add(imm_operand);
                 } else {
                     /* If immediate mode is not being used, the instruction refers to a second destination register */
@@ -325,7 +325,7 @@ fn main() {
 
                 if imm_mode {
                     /* Immediate mode means the second operand is encoded in the instruction itself */
-                    let imm_operand = sign_extend(instruction & 0x1f, 5);
+                    let imm_operand = sign_extend(instruction & 0x1F, 5);
                     registers[dst_reg] = registers[src_reg_1] & imm_operand;
                 } else {
                     /* If immediate mode is not being used, the instruction refers to a second destination register */
@@ -350,7 +350,7 @@ fn main() {
                 /* The flags are in the same order in the instruction and the register */
                 if (condition_flags & registers[RCOND]) != 0 {
                     /* Branch by adding the sign extended PC offset to the PC */
-                    let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                    let pc_offset = sign_extend(instruction & 0x1FF, 9);
                     registers[RPC] = registers[RPC].wrapping_add(pc_offset);
                 }
             }
@@ -367,7 +367,7 @@ fn main() {
                     registers[RPC] = registers[base_reg];
                 /* If the bit is 1, jump to the address encoded in the instruction itself */
                 } else {
-                    let pc_offset = sign_extend(instruction & 0x7ff, 11);
+                    let pc_offset = sign_extend(instruction & 0x7FF, 11);
                     registers[RPC] = registers[RPC].wrapping_add(pc_offset);
                 }
             }
@@ -375,7 +375,7 @@ fn main() {
                 let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
 
                 /* Get PC offset, add to PC, and load value at the resulting memory location to dst_reg */
-                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                let pc_offset = sign_extend(instruction & 0x1FF, 9);
                 registers[dst_reg] =
                     mem_read(&mut memory, registers[RPC].wrapping_add(pc_offset) as usize);
 
@@ -397,7 +397,7 @@ fn main() {
 
                 /* The value in the base register, added to an offset, point to the value to be loaded */
                 let base_reg = ((instruction >> 6) & 0x7) as usize;
-                let offset = sign_extend(instruction & 0x3f, 6);
+                let offset = sign_extend(instruction & 0x3F, 6);
                 registers[dst_reg] = mem_read(
                     &mut memory,
                     registers[base_reg].wrapping_add(offset) as usize,
@@ -409,7 +409,7 @@ fn main() {
                 let dst_reg = ((instruction >> 9) & 0x7) as usize; /* Register where value will be loaded */
 
                 /* Get PC offset from the instruction, and add to PC to get address of value */
-                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                let pc_offset = sign_extend(instruction & 0x1FF, 9);
                 registers[dst_reg] = registers[RPC].wrapping_add(pc_offset);
 
                 update_flags(registers[dst_reg], &mut registers[RCOND]);
@@ -418,7 +418,7 @@ fn main() {
                 let src_reg = ((instruction >> 9) & 0x7) as usize; /* Register containing value to be stored */
 
                 /* Destination address calculated by adding pc_offset to PC */
-                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                let pc_offset = sign_extend(instruction & 0x1FF, 9);
                 mem_write(
                     &mut memory,
                     registers[RPC].wrapping_add(pc_offset) as usize,
@@ -429,7 +429,7 @@ fn main() {
                 let src_reg = ((instruction >> 9) & 0x7) as usize; /* Register containing value to be stored */
 
                 /* Add pc_offset to PC to get address of address at which value should be stored */
-                let pc_offset = sign_extend(instruction & 0x1ff, 9);
+                let pc_offset = sign_extend(instruction & 0x1FF, 9);
                 let address =
                     mem_read(&mut memory, registers[RPC].wrapping_add(pc_offset) as usize) as usize;
                 mem_write(&mut memory, address, registers[src_reg]);
@@ -439,17 +439,17 @@ fn main() {
 
                 /* Destination address calculated by adding offset to base_reg */
                 let base_reg = ((instruction >> 6) & 0x7) as usize;
-                let offset = sign_extend(instruction & 0x3f, 6);
+                let offset = sign_extend(instruction & 0x3F, 6);
                 mem_write(
                     &mut memory,
-                    (registers[base_reg].wrapping_add(offset)) as usize, /* TODO: Fix rest of wrapping_adds */
+                    (registers[base_reg].wrapping_add(offset)) as usize,
                     registers[src_reg],
                 );
             }
             OP_TRAP => {
                 registers[R7] = registers[RPC]; /* Store program counter */
 
-                match instruction & 0xff {
+                match instruction & 0xFF {
                     TRAP_GETC => {
                         /* Get u8 ascii character from standard input */
                         registers[R0] = match get_char() {
@@ -462,12 +462,12 @@ fn main() {
                     }
                     TRAP_OUT => {
                         /* C implementation uses putc, so I decided to only treat ascii characters here */
-                        print!("{}", (registers[R0] as u8) as char);
-                        /* Attempt to flush */
-                        if stdout().flush().is_err() {
-                            println!("Could not execute out trap. Quitting.\n");
-                            running = false;
+                        if registers[R0] as i16 == EOF {
+                            continue; /* Should not attempt to print EOF, so continue to next instruction */
                         }
+                        print!("{}", registers[R0] as u8 as char);
+                        /* Attempt to flush */
+                        let _ = stdout().flush();
                     }
                     TRAP_PUTS => {
                         /*
@@ -488,27 +488,25 @@ fn main() {
                         }
 
                         /* Attempt to flush */
-                        if stdout().flush().is_err() {
-                            println!("Could not execute puts trap. Quitting.\n");
-                            running = false;
-                        }
+                        let _ = stdout().flush();
                     }
                     TRAP_IN => {
                         println!("Enter a character: ");
                         let ch = match get_char() {
                             Ok(EOF) => continue, /* On EOF, give up on getting input and continue */
-                            Ok(ch) => ch as u16,
+                            Ok(ch) => ch,
                             Err(_) => continue, /* On error, give up on getting input and continue */
-                        } as u8 as char;
+                        };
+
+                        if ch == EOF {
+                            continue; /* Should not attempt to print EOF, so continue to next instruction */
+                        }
 
                         /* C implementation uses putc, so I decided to only treat ascii characters here */
-                        print!("{}", ch);
+                        print!("{}", ch as u8 as char);
 
                         /* Attempt to flush */
-                        if stdout().flush().is_err() {
-                            println!("Could not execute in trap. Quitting.\n");
-                            running = false;
-                        }
+                        let _ = stdout().flush();
 
                         registers[R0] = ch as u16;
                         update_flags(registers[R0], &mut registers[RCOND]);
@@ -520,7 +518,7 @@ fn main() {
                          */
                         for i in (registers[R0] as usize)..MEMORY_MAX {
                             let word = mem_read(&mut memory, i);
-                            let char1 = ((word & 0xff) as u8) as char;
+                            let char1 = word as u8 as char;
                             if char1 == '\0' {
                                 break;
                             }
@@ -539,28 +537,40 @@ fn main() {
                         }
 
                         /* Attempt to flush */
-                        if stdout().flush().is_err() {
-                            println!("Could not execute putsp trap. Quitting.\n");
-                            running = false;
-                        }
+                        let _ = stdout().flush();
                     }
                     TRAP_HALT => {
                         println!("Halting.");
-                        running = false;
+                        break;
                     }
-                    /* TODO: logging when encountering unrecognised trap or instruction */
-                    _ => break, /* Trap code not implemented */
+                    _ => {
+                        println!("Unrecoginised trap ({}). Quitting.", instruction & 0xFF);
+                        break;
+                    }
                 }
             }
-            OP_RES => break, /* Not implemented */
-            OP_RTI => break, /* Not implemented */
-            _ => break,
+            OP_RES => {
+                println!("Instruction OP_RES ({}) not implemented. Quitting.", op);
+                break;
+            }
+            OP_RTI => {
+                println!("Instruction OP_RTI ({}) not implemented. Quitting.", op);
+                break;
+            }
+            _ => {
+                println!("Unrecoginised instruction ({}). Quitting.", op);
+                break;
+            }
         }
     }
 
     /* Re-enable input buffering in terminal */
     if toggle_vm_terminal(false).is_err() {
         println!("Could not apply changes to terminal buffering settings. Quitting.");
-        exit(1);
+        return ExitCode::FAILURE;
     }
+
+    println!();
+
+    ExitCode::SUCCESS
 }

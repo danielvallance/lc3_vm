@@ -6,4 +6,4 @@ This repository contains a Rust implementation of a LC-3 VM, which I wrote while
 
 An image file containing LC-3 assembly should be passed as an argument.
 
-This repo contains the LC-3 assembly for a game of 2048. This can be run by running ```cargo run 2048.obj``` from the project root.
+This repo contains the LC-3 assembly for games of 2048 and Rogue. These can be run by running ```cargo run 2048.obj``` or ```cargo run rogue.obj``` from the project root.
