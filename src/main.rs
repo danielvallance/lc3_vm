@@ -27,12 +27,12 @@ const MEMORY_MAX: usize = 1 << 16;
  */
 /* General purpose registers */
 const R0: usize = 0;
-const R1: usize = 1;
-const R2: usize = 2;
-const R3: usize = 3;
-const R4: usize = 4;
-const R5: usize = 5;
-const R6: usize = 6;
+const _R1: usize = 1;
+const _R2: usize = 2;
+const _R3: usize = 3;
+const _R4: usize = 4;
+const _R5: usize = 5;
+const _R6: usize = 6;
 const R7: usize = 7;
 const RPC: usize = 8; /* Program counter */
 const RCOND: usize = 9; /* Condition flag register */
@@ -285,8 +285,7 @@ fn main() -> ExitCode {
     registers[RPC] = PC_START;
 
     /* Main fetch-execute cycle loop */
-    let mut running = true;
-    while running {
+    loop {
         /* Fetch instruction at PC's address */
         let instruction = mem_read(&mut memory, registers[RPC] as usize);
 
